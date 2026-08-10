@@ -41,12 +41,31 @@ def _wled_devices(
     Returns device_id -> (device_entry, owning wled ConfigEntry). Re-run on
     every coordinator refresh so newly-added or removed QuinLED/WLED devices
     are picked up automatically, with no config change needed here.
+
+    Deliberately resolved via the entity registry (find any wled-platform
+    entity for the config entry, then read *its* device_id) rather than
+    device_registry.async_entries_for_config_entry(). The latter reads a
+    per-config-entry reverse index that can point at a stale/orphaned
+    device_id left behind by a prior device-registry migration (observed on
+    a real instance: an empty duplicate device coexisting with the device
+    that actually owns all the entities). Entity registry linkage reflects
+    what's actually live right now, so it doesn't have that failure mode.
     """
     device_registry = dr.async_get(hass)
+    entity_registry = er.async_get(hass)
     result: dict[str, tuple[dr.DeviceEntry, ConfigEntry]] = {}
     for entry in hass.config_entries.async_entries(WLED_DOMAIN):
-        for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
-            result[device.id] = (device, entry)
+        device_id: str | None = None
+        for entity in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
+            if entity.device_id:
+                device_id = entity.device_id
+                break
+        if device_id is None:
+            continue
+        device = device_registry.async_get(device_id)
+        if device is None:
+            continue
+        result[device.id] = (device, entry)
     return result
 
 
