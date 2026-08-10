@@ -1,0 +1,14 @@
+{
+  "domain": "quinled_updater",
+  "name": "QuinLED Firmware Updater",
+  "codeowners": ["@TheFehr"],
+  "config_flow": true,
+  "dependencies": ["wled"],
+  "documentation": "https://github.com/TheFehr/ha-quinled-updater",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/TheFehr/ha-quinled-updater/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.1.0"
+}
