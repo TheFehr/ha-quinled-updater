@@ -25,6 +25,7 @@ from .const import (
     GITHUB_RELEASES_URL,
     MODEL_ASSET_MAP,
     OTA_PATH,
+    OTA_SKIP_VALIDATION_FIELD_NAME,
     OTA_UPLOAD_FIELD_NAME,
     WLED_DOMAIN,
 )
@@ -124,6 +125,14 @@ class QuinLEDUpdateEntity(CoordinatorEntity[QuinLEDReleaseCoordinator], UpdateEn
         self._host: str | None = wled_entry.data.get(CONF_HOST)
         self._attr_unique_id = f"{DOMAIN}_{device_entry.id}"
 
+        # The wled integration's OWN update entity tracks the live firmware
+        # version via its coordinator polling (default ~30s). The device
+        # registry's sw_version field is not kept in sync on every poll -
+        # only on (re)setup - so it lags behind after a real firmware flash
+        # until the wled config entry happens to reload. Reading the sibling
+        # entity's state instead gives an accurate installed_version.
+        self._wled_update_entity_id: str | None = None
+
         # Deliberately NOT reusing the wled device's own identifiers here.
         # On instances where the device registry has a leftover duplicate
         # device row for the same identifiers (see README "Known
@@ -150,8 +159,22 @@ class QuinLEDUpdateEntity(CoordinatorEntity[QuinLEDReleaseCoordinator], UpdateEn
     def available(self) -> bool:
         return super().available and self._device is not None
 
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        entity_registry = er.async_get(self.hass)
+        for entity in er.async_entries_for_device(entity_registry, self._device_id):
+            if entity.domain == "update" and entity.platform == WLED_DOMAIN:
+                self._wled_update_entity_id = entity.entity_id
+                break
+
     @property
     def installed_version(self) -> str | None:
+        if self._wled_update_entity_id:
+            state = self.hass.states.get(self._wled_update_entity_id)
+            if state is not None:
+                version = state.attributes.get("installed_version")
+                if version:
+                    return version
         device = self._device
         return device.sw_version if device else None
 
@@ -173,6 +196,7 @@ class QuinLEDUpdateEntity(CoordinatorEntity[QuinLEDReleaseCoordinator], UpdateEn
 
         model = device.model or ""
         asset_name = MODEL_ASSET_MAP.get(model, model)
+        used_legacy_mapping = model in MODEL_ASSET_MAP
         release_version = self.coordinator.data.version
         filename = f"{ASSET_PREFIX}_{release_version}_{asset_name}.bin"
 
@@ -208,6 +232,12 @@ class QuinLEDUpdateEntity(CoordinatorEntity[QuinLEDReleaseCoordinator], UpdateEn
             ) from err
 
         form = aiohttp.FormData()
+        if used_legacy_mapping:
+            # The device's own release-name safety check would otherwise
+            # reject this upload, since we already know its self-reported
+            # name ('model') doesn't match the asset we're intentionally
+            # substituting via MODEL_ASSET_MAP.
+            form.add_field(OTA_SKIP_VALIDATION_FIELD_NAME, "1")
         form.add_field(
             OTA_UPLOAD_FIELD_NAME,
             firmware_bytes,
@@ -222,7 +252,7 @@ class QuinLEDUpdateEntity(CoordinatorEntity[QuinLEDReleaseCoordinator], UpdateEn
                     body = await response.text()
                     raise HomeAssistantError(
                         f"Firmware upload to '{device.name}' ({upload_url}) failed: "
-                        f"HTTP {response.status}: {body[:200]}"
+                        f"HTTP {response.status}: {body[:500]}"
                     )
         except HomeAssistantError:
             raise

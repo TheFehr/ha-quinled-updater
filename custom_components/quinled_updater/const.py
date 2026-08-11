@@ -32,3 +32,13 @@ SCAN_INTERVAL = timedelta(hours=1)
 
 OTA_UPLOAD_FIELD_NAME = "file"
 OTA_PATH = "/update"
+
+# The device's own /update form posts this alongside the file (as a hidden
+# input toggled by an "Ignore firmware validation" checkbox) to bypass its
+# release-name safety check. Not a persistent device setting - must be sent
+# with every request that needs it. WLED/QuinLED firmware refuses an OTA
+# upload whose embedded release name doesn't match its own currently
+# installed release name; that's expected and desired for boards not in
+# MODEL_ASSET_MAP, so this is only sent when we've deliberately mapped a
+# known legacy/renamed board name (see async_install in update.py).
+OTA_SKIP_VALIDATION_FIELD_NAME = "skipValidation"
