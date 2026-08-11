@@ -16,6 +16,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
@@ -166,6 +167,23 @@ class QuinLEDUpdateEntity(CoordinatorEntity[QuinLEDReleaseCoordinator], UpdateEn
             if entity.domain == "update" and entity.platform == WLED_DOMAIN:
                 self._wled_update_entity_id = entity.entity_id
                 break
+
+        if self._wled_update_entity_id:
+            # Mirror the sibling wled update entity's own state changes
+            # immediately (e.g. once it reports the new installed_version
+            # after a flash + reboot), instead of only picking it up on our
+            # own coordinator's next hourly GitHub refresh.
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass,
+                    [self._wled_update_entity_id],
+                    self._handle_wled_state_change,
+                )
+            )
+
+    @callback
+    def _handle_wled_state_change(self, event) -> None:
+        self.async_write_ha_state()
 
     @property
     def installed_version(self) -> str | None:
