@@ -123,7 +123,24 @@ class QuinLEDUpdateEntity(CoordinatorEntity[QuinLEDReleaseCoordinator], UpdateEn
         self._device_id = device_entry.id
         self._host: str | None = wled_entry.data.get(CONF_HOST)
         self._attr_unique_id = f"{DOMAIN}_{device_entry.id}"
-        self._attr_device_info = DeviceInfo(identifiers=device_entry.identifiers)
+
+        # Deliberately NOT reusing the wled device's own identifiers here.
+        # On instances where the device registry has a leftover duplicate
+        # device row for the same identifiers (see README "Known
+        # limitation"), asking HA to find-or-create by those identifiers is
+        # ambiguous and can attach us to the wrong (or a fresh, unnamed) row.
+        # Using our own domain-scoped identifier is always unambiguous; the
+        # `name`/`manufacturer`/`model` fields (copied from the real device)
+        # plus `via_device` keep it correctly labelled and visually grouped
+        # under the real device in the UI even though it's a separate entry.
+        wled_identifier = next(iter(device_entry.identifiers), None)
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, device_entry.id)},
+            name=device_entry.name_by_user or device_entry.name,
+            manufacturer=device_entry.manufacturer,
+            model=device_entry.model,
+            via_device=wled_identifier,
+        )
 
     @property
     def _device(self) -> dr.DeviceEntry | None:

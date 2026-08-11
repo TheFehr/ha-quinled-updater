@@ -33,6 +33,24 @@ matching asset from the QuinLED-Firmware GitHub releases instead.
 3. Install "QuinLED Firmware Updater", restart Home Assistant.
 4. Settings → Devices & Services → **Add Integration** → "QuinLED Firmware Updater".
 
+## Known limitation: device merging
+
+The update entity is normally created on the *same* device page as your
+existing WLED entities (light, sensors, etc.), matched by device identifier.
+On instances where the `wled` integration's device registry has a leftover
+duplicate device row for the same physical unit (seen after an upstream WLED
+unique-ID migration — see
+[home-assistant/core#157901](https://github.com/home-assistant/core/pull/157901)
+— left an orphaned empty device behind instead of cleaning it up), Home
+Assistant's device lookup can be ambiguous and the update entity ends up on
+its own separate device page instead. It's still fully functional either
+way — this only affects which device page it's grouped under. There's no
+supported way to fix this from within this integration: removing the stale
+duplicate requires the `wled` integration itself to support device removal
+via `async_remove_config_entry_device`, which it doesn't as of this writing.
+If you hit this, check Settings → Devices for a duplicate entry with 0
+entities under the affected device's name.
+
 ## Known boards
 
 | Self-reported model | Release asset used |
