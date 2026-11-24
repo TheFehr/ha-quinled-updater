@@ -26,6 +26,7 @@ ASSET_PREFIX = "WLED"
 # device's name isn't in this map, its raw name is tried as-is first.
 MODEL_ASSET_MAP: dict[str, str] = {
     "Dig-Uno-Audioreactive": "Dig-Uno-V3-AEplus",
+    "Dig-Quad-Audioreactive": "Dig-Quad-V3",
 }
 
 SCAN_INTERVAL = timedelta(hours=1)
